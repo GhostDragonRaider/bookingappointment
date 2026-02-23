@@ -1,7 +1,10 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useLayoutEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import styled from "@emotion/styled"
-import { isValidPhone, isValidEmail, PHONE_ERROR, EMAIL_ERROR } from "./validation"
+import { isValidPhone, isValidEmail } from "./validation"
+import { useLanguage } from "./LanguageContext"
+import { useTopBarExtra } from "./TopBarContext"
+import { PHONE_ERROR_MSG, EMAIL_ERROR_MSG } from "./translations"
 
 const API_BASE = "" // relatív: /api → proxy a backendre (dev és production)
 const ADMIN_KEY = "admin_session"
@@ -290,13 +293,6 @@ const LoadingText = styled.p`
   }
 `
 
-const HeaderActions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-`
-
 const AddBookingButton = styled.button`
   padding: 0.5rem 1rem;
   font-size: 0.9rem;
@@ -394,6 +390,7 @@ const ModalSecondaryButton = styled.button`
 
 export default function AdminPage() {
   const navigate = useNavigate()
+  const { lang, t } = useLanguage()
 
   const handleLogout = () => {
     sessionStorage.removeItem(ADMIN_KEY)
@@ -419,6 +416,12 @@ export default function AdminPage() {
   const [addEmail, setAddEmail] = useState("")
   const [addError, setAddError] = useState("")
   const [editError, setEditError] = useState("")
+
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [settingsPriceEur, setSettingsPriceEur] = useState(30)
+  const [settingsPriceHuf, setSettingsPriceHuf] = useState(11000)
+  const [settingsError, setSettingsError] = useState("")
+  const [settingsLoading, setSettingsLoading] = useState(false)
 
   const loadBookings = () => {
     fetch(`${API_BASE}/api/admin/bookings`)
@@ -467,22 +470,71 @@ export default function AdminPage() {
         setAddModalLoading(false)
       })
       .catch(() => {
-        setAddError("Nem sikerült betölteni az elérhető időpontokat.")
+        setAddError(t("addErrorLoad"))
         setAddModalLoading(false)
       })
   }
 
+  const openSettingsModal = () => {
+    setShowSettingsModal(true)
+    setSettingsError("")
+    setSettingsLoading(true)
+    fetch(`${API_BASE}/api/admin/settings`)
+      .then(async (r) => {
+        try {
+          return await r.json()
+        } catch {
+          return { price_eur: 30, price_huf: 11000 }
+        }
+      })
+      .then((data) => {
+        setSettingsPriceEur(typeof data.price_eur === "number" ? data.price_eur : 30)
+        setSettingsPriceHuf(typeof data.price_huf === "number" ? data.price_huf : 11000)
+        setSettingsLoading(false)
+      })
+      .catch(() => {
+        setSettingsError(t("settingsError"))
+        setSettingsLoading(false)
+      })
+  }
+
+  const handleSaveSettings = () => {
+    setSettingsError("")
+    const eur = Math.max(0, Math.floor(Number(settingsPriceEur))) || 0
+    const huf = Math.max(0, Math.floor(Number(settingsPriceHuf))) || 0
+    fetch(`${API_BASE}/api/admin/settings`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ price_eur: eur, price_huf: huf }),
+    })
+      .then(async (r) => {
+        try {
+          return await r.json()
+        } catch {
+          return { ok: false }
+        }
+      })
+      .then((res) => {
+        if (res.ok) {
+          setShowSettingsModal(false)
+        } else {
+          setSettingsError(res.error || t("settingsSaveError"))
+        }
+      })
+      .catch(() => setSettingsError(t("settingsSaveError")))
+  }
+
   const handleAddBooking = () => {
     if (!addSlotId) {
-      setAddError("Válassz egy időpontot.")
+      setAddError(t("addErrorSlot"))
       return
     }
     if (!isValidPhone(addPhone.trim())) {
-      setAddError(PHONE_ERROR)
+      setAddError(PHONE_ERROR_MSG[lang])
       return
     }
     if (!isValidEmail(addEmail.trim())) {
-      setAddError(EMAIL_ERROR)
+      setAddError(EMAIL_ERROR_MSG[lang])
       return
     }
     setAddError("")
@@ -508,10 +560,10 @@ export default function AdminPage() {
           setShowAddModal(false)
           loadBookings()
         } else {
-          setAddError("A foglalás felvétele sikertelen (az időpont már foglalt lehet).")
+          setAddError(t("addErrorFail"))
         }
       })
-      .catch(() => setAddError("Hiba történt a foglalás felvételekor."))
+      .catch(() => setAddError(t("addErrorGeneric")))
   }
 
   useEffect(() => {
@@ -553,11 +605,11 @@ export default function AdminPage() {
     if (!selected) return
     setEditError("")
     if (!isValidPhone(editPhone.trim())) {
-      setEditError(PHONE_ERROR)
+      setEditError(PHONE_ERROR_MSG[lang])
       return
     }
     if (!isValidEmail(editEmail.trim())) {
-      setEditError(EMAIL_ERROR)
+      setEditError(EMAIL_ERROR_MSG[lang])
       return
     }
     const payload: Record<string, unknown> = {
@@ -591,13 +643,32 @@ export default function AdminPage() {
             setSelected({ ...selected, booking_name: editName, phone: editPhone, email: editEmail })
           }
         } else {
-          setEditError(res.error || "Módosítás sikertelen.")
+          setEditError(res.error || t("updateError"))
         }
       })
   }
 
+  const setTopBarExtra = useTopBarExtra()
+  useLayoutEffect(() => {
+    if (!setTopBarExtra) return
+    setTopBarExtra(
+      <>
+        <AddBookingButton type="button" onClick={openAddModal}>
+          {t("addBooking")}
+        </AddBookingButton>
+        <ActionButton type="button" onClick={openSettingsModal} style={{ background: "#6c757d" }}>
+          {t("settings")}
+        </ActionButton>
+        <LogoutButton type="button" onClick={handleLogout}>
+          {t("logout")}
+        </LogoutButton>
+      </>
+    )
+    return () => setTopBarExtra(null)
+  }, [setTopBarExtra, openAddModal, openSettingsModal, handleLogout, t])
+
   const handleDelete = () => {
-    if (!selected || !confirm("Biztosan törölni szeretnéd a foglalást?")) return
+    if (!selected || !confirm(t("deleteConfirm"))) return
     fetch(`${API_BASE}/api/admin/bookings/${selected.id}`, { method: "DELETE" })
       .then(async (r) => {
         try {
@@ -618,29 +689,21 @@ export default function AdminPage() {
   return (
     <Page>
       <Header>
-        <Title>Admin panel – Foglalt időpontok</Title>
-        <HeaderActions>
-          <AddBookingButton type="button" onClick={openAddModal}>
-            Foglalás hozzáadása manuálisan
-          </AddBookingButton>
-          <LogoutButton type="button" onClick={handleLogout}>
-            Kijelentkezés
-          </LogoutButton>
-        </HeaderActions>
+        <Title>{t("adminTitle")}</Title>
       </Header>
 
       {showAddModal && (
         <ModalOverlay onClick={() => setShowAddModal(false)}>
           <ModalBox onClick={(e) => e.stopPropagation()}>
-            <ModalTitle>Foglalás hozzáadása manuálisan</ModalTitle>
+            <ModalTitle>{t("addBookingModalTitle")}</ModalTitle>
             {addModalLoading ? (
-              <LoadingText>Elérhető időpontok betöltése…</LoadingText>
+              <LoadingText>{t("slotsLoad")}</LoadingText>
             ) : (
               <>
-                <Label>Válassz szabad időpontot</Label>
+                <Label>{t("selectSlot")}</Label>
                 <SlotGrid>
                   {freeSlots.length === 0 ? (
-                    <EmptyText style={{ gridColumn: "1 / -1" }}>Nincs elérhető szabad időpont.</EmptyText>
+                    <EmptyText style={{ gridColumn: "1 / -1" }}>{t("noSlots")}</EmptyText>
                   ) : (
                     freeSlots.map((s) => (
                       <SlotChip
@@ -655,37 +718,80 @@ export default function AdminPage() {
                   )}
                 </SlotGrid>
                 <Label>
-                  Foglaló neve
+                  {t("bookerName")}
                   <Input
                     value={addName}
                     onChange={(e) => setAddName(e.target.value)}
-                    placeholder="Név"
+                    placeholder={t("bookingNamePlaceholder")}
                   />
                 </Label>
                 <Label>
-                  Telefonszám
+                  {t("phoneLabel")}
                   <Input
                     value={addPhone}
                     onChange={(e) => setAddPhone(e.target.value)}
-                    placeholder="+36 30 123 4567"
+                    placeholder={t("phonePlaceholder")}
                   />
                 </Label>
                 <Label>
-                  E-mail cím
+                  {t("emailLabel")}
                   <Input
                     type="email"
                     value={addEmail}
                     onChange={(e) => setAddEmail(e.target.value)}
-                    placeholder="pelda@email.hu"
+                    placeholder={t("emailPlaceholderBooking")}
                   />
                 </Label>
                 {addError && <ModalError>{addError}</ModalError>}
                 <ModalButtonRow>
                   <ActionButton type="button" onClick={handleAddBooking} style={{ background: "#28a745" }}>
-                    Foglalás felvétele
+                    {t("addBookingSubmit")}
                   </ActionButton>
                   <ModalSecondaryButton type="button" onClick={() => setShowAddModal(false)}>
-                    Mégse
+                    {t("cancel")}
+                  </ModalSecondaryButton>
+                </ModalButtonRow>
+              </>
+            )}
+          </ModalBox>
+        </ModalOverlay>
+      )}
+
+      {showSettingsModal && (
+        <ModalOverlay onClick={() => setShowSettingsModal(false)}>
+          <ModalBox onClick={(e) => e.stopPropagation()}>
+            <ModalTitle>{t("settingsModalTitle")}</ModalTitle>
+            {settingsLoading ? (
+              <LoadingText>{t("settingsLoad")}</LoadingText>
+            ) : (
+              <>
+                <Label>
+                  {t("priceEur")}
+                  <Input
+                    type="number"
+                    min={0}
+                    value={settingsPriceEur}
+                    onChange={(e) => setSettingsPriceEur(Number(e.target.value) || 0)}
+                    placeholder="30"
+                  />
+                </Label>
+                <Label>
+                  {t("priceHuf")}
+                  <Input
+                    type="number"
+                    min={0}
+                    value={settingsPriceHuf}
+                    onChange={(e) => setSettingsPriceHuf(Number(e.target.value) || 0)}
+                    placeholder="11000"
+                  />
+                </Label>
+                {settingsError && <ModalError>{settingsError}</ModalError>}
+                <ModalButtonRow>
+                  <ActionButton type="button" onClick={handleSaveSettings}>
+                    {t("save")}
+                  </ActionButton>
+                  <ModalSecondaryButton type="button" onClick={() => setShowSettingsModal(false)}>
+                    {t("cancel")}
                   </ModalSecondaryButton>
                 </ModalButtonRow>
               </>
@@ -695,12 +801,12 @@ export default function AdminPage() {
       )}
 
       {loading ? (
-        <LoadingText>Betöltés…</LoadingText>
+        <LoadingText>{t("loading")}</LoadingText>
       ) : (
         <ContentRow hasPanel={bookings.length > 0}>
           <ListWrapper>
             {bookings.length === 0 ? (
-              <EmptyText>Nincs foglalt időpont.</EmptyText>
+              <EmptyText>{t("noBookings")}</EmptyText>
             ) : (
               <List>
                 {bookings.map((b) => (
@@ -725,28 +831,28 @@ export default function AdminPage() {
           {bookings.length > 0 && (
             selected ? (
             <DetailPanel>
-              <DetailTitle>Foglalás részletei</DetailTitle>
+              <DetailTitle>{t("bookingDetails")}</DetailTitle>
               {!editMode ? (
             <>
-              <DetailLine><strong>Időpont:</strong> {selected.date} – {selected.time}</DetailLine>
-              <DetailLine><strong>Foglaló neve:</strong> {selected.booking_name || "–"}</DetailLine>
-              <DetailLine><strong>Telefonszám:</strong> {selected.phone || "–"}</DetailLine>
-              <DetailLine><strong>E-mail:</strong> {selected.email || "–"}</DetailLine>
+              <DetailLine><strong>{t("timeLabel")}</strong> {selected.date} – {selected.time}</DetailLine>
+              <DetailLine><strong>{t("bookerName")}</strong> {selected.booking_name || "–"}</DetailLine>
+              <DetailLine><strong>{t("phoneLabel")}</strong> {selected.phone || "–"}</DetailLine>
+              <DetailLine><strong>{t("emailLabel")}</strong> {selected.email || "–"}</DetailLine>
               <ButtonRow>
                 <ActionButton type="button" onClick={() => setEditMode(true)}>
-                  Foglalás módosítása
+                  {t("editBooking")}
                 </ActionButton>
                 <ActionButton type="button" danger onClick={handleDelete}>
-                  Foglalás törlése
+                  {t("deleteBooking")}
                 </ActionButton>
               </ButtonRow>
             </>
           ) : (
             <EditForm>
               {editError && <ModalError>{editError}</ModalError>}
-              <Label>Időpont</Label>
+              <Label>{t("timeLabel")}</Label>
               {editSlotsLoading ? (
-                <LoadingText style={{ marginBottom: "0.5rem" }}>Időpontok betöltése…</LoadingText>
+                <LoadingText style={{ marginBottom: "0.5rem" }}>{t("slotsLoad")}</LoadingText>
               ) : (
               <SlotGrid>
                 {availableSlotsForEdit.map((s) => (
@@ -762,36 +868,36 @@ export default function AdminPage() {
               </SlotGrid>
               )}
               <Label>
-                Foglaló neve
+                {t("bookerName")}
                 <Input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  placeholder="Név"
+                  placeholder={t("bookingNamePlaceholder")}
                 />
               </Label>
               <Label>
-                Telefonszám
+                {t("phoneLabel")}
                 <Input
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
-                  placeholder="+36 30 123 4567"
+                  placeholder={t("phonePlaceholder")}
                 />
               </Label>
               <Label>
-                E-mail cím
+                {t("emailLabel")}
                 <Input
                   type="email"
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
-                  placeholder="pelda@email.hu"
+                  placeholder={t("emailPlaceholderBooking")}
                 />
               </Label>
               <ButtonRow>
                 <ActionButton type="button" onClick={handleUpdate}>
-                  Mentés
+                  {t("save")}
                 </ActionButton>
                 <ActionButton type="button" onClick={() => setEditMode(false)} style={{ background: "#6c757d" }}>
-                  Mégse
+                  {t("cancel")}
                 </ActionButton>
               </ButtonRow>
             </EditForm>
@@ -799,9 +905,9 @@ export default function AdminPage() {
             </DetailPanel>
             ) : (
               <DetailPanel>
-                <DetailTitle>Foglalás részletei</DetailTitle>
+                <DetailTitle>{t("bookingDetails")}</DetailTitle>
                 <EmptyText style={{ marginTop: "1rem" }}>
-                  Válassz egy foglalást a listából.
+                  {t("selectBooking")}
                 </EmptyText>
               </DetailPanel>
             )

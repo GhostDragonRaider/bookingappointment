@@ -39,7 +39,7 @@ def _is_valid_email(s: str) -> bool:
         return False
     return bool(re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", s.strip()))
 
-MESSENGER_VERIFY_TOKEN = os.environ.get("MESSENGER_VERIFY_TOKEN", "chirostrong_webhook_2025")
+MESSENGER_VERIFY_TOKEN = os.environ.get("MESSENGER_VERIFY_TOKEN", "demo_webhook_2025")
 MESSENGER_PAGE_ACCESS_TOKEN = os.environ.get("MESSENGER_PAGE_ACCESS_TOKEN", "")
 
 HONAPOK = {"01": "január", "02": "február", "03": "március", "04": "április", "05": "május",
@@ -88,14 +88,14 @@ def _send_reminder_email(to_email: str, name: str, slot_date: str, slot_time: st
         f"Kedves {name}!\n\n"
         f"Emlékeztetjük: várunk szeretettel az időpontodon ({slot_date} {slot_time}). Ne feledkezz el róla!\n\n"
         f"Időpont: {slot_date} – {slot_time}\n"
-        f"Cím: 3980 Sátoraljaújhely, Hősök tere út 2\n\n"
-        f"Szolgáltatás díja: 30 € / 11 000 Ft\n\n"
-        f"Üdvözlettel,\nChiroStrong"
+        f"Cím és elérhetőség: az oldalon megadott adatok szerint.\n\n"
+        f"Szolgáltatás díja: {db.get_settings()['price_display']}\n\n"
+        f"Üdvözlettel,\nIdőpontfoglaló rendszer"
     )
     msg = MIMEMultipart()
     msg["From"] = from_addr
     msg["To"] = to_email
-    msg["Subject"] = f"ChiroStrong – emlékeztető: {slot_date} {slot_time}"
+    msg["Subject"] = f"Emlékeztető – időpont: {slot_date} {slot_time}"
     msg.attach(MIMEText(body, "plain", "utf-8"))
     try:
         with smtplib.SMTP(host, port) as s:
@@ -149,6 +149,13 @@ def health():
 def which():
     """Közvetlenül a 8000-es porton: http://localhost:8000/api/which"""
     return {"app": "project1", "file": "server.py", "message": "Helyes szerver."}
+
+
+@app.get("/api/settings")
+@app.get("/settings")
+def get_settings():
+    """Nyilvános beállítások (pl. ár a frontenden)."""
+    return db.get_settings()
 
 
 @app.get("/api/slots")
@@ -209,6 +216,28 @@ def delete_admin_booking(slot_id: int):
     return {"ok": ok}
 
 
+class SettingsRequest(BaseModel):
+    price_eur: int = 30
+    price_huf: int = 11000
+
+
+@app.get("/api/admin/settings")
+@app.get("/admin/settings")
+def get_admin_settings():
+    """Admin: beállítások lekérése."""
+    return db.get_settings()
+
+
+@app.patch("/api/admin/settings")
+@app.patch("/admin/settings")
+def update_admin_settings(data: SettingsRequest):
+    """Admin: ár beállítások frissítése."""
+    if data.price_eur < 0 or data.price_huf < 0:
+        return {"ok": False, "error": "Az árak nem lehetnek negatívak."}
+    ok = db.update_settings(data.price_eur, data.price_huf)
+    return {"ok": ok, "settings": db.get_settings()}
+
+
 # --- Facebook Messenger webhook ---
 
 def _messenger_send(recipient_id: str, message: dict) -> bool:
@@ -247,11 +276,27 @@ def _send_quick_replies(rid: str, text: str, replies: list[dict]) -> bool:
 
 
 def _send_greeting_with_button(rid: str) -> bool:
-    return _send_buttons(rid, "Szia! ChiroStrong időpontfoglaló bot vagyok. Üdvözöllek! Foglalj időpontot az alábbi gombbal.", [{"title": "Időpont foglalása", "payload": "BOOK_START"}])
+    return _send_buttons(rid, "Szia! Időpontfoglaló demo bot vagyok. Üdvözöllek! Foglalj időpontot az alábbi gombbal.", [{"title": "Időpont foglalása", "payload": "BOOK_START"}])
+
+
+def _is_slot_in_past(slot: dict) -> bool:
+    """True, ha az időpont (dátum + idő) már elmúlt."""
+    d = slot.get("date", "")
+    t = slot.get("time", "")
+    if not d or not t:
+        return True
+    try:
+        slot_dt = datetime.strptime(f"{d} {t}", "%Y-%m-%d %H:%M")
+        return slot_dt <= datetime.now()
+    except (ValueError, TypeError):
+        return True
 
 
 def _get_free_slots():
-    return [s for s in db.get_slots() if s.get("status") == "free"]
+    return [
+        s for s in db.get_slots()
+        if s.get("status") == "free" and not _is_slot_in_past(s)
+    ]
 
 
 def _months_from_slots(slots: list) -> list[tuple[str, str]]:
@@ -342,7 +387,7 @@ def _handle_postback(sender_id: str, payload: str) -> None:
             _send_text(sender_id, "A jelenleg lefoglalt időpontod törlésre került.")
             _send_buttons(sender_id, "Szeretnél új időpontot foglalni?", [{"title": "Új időpont foglalása", "payload": "BOOK_START"}])
         else:
-            _send_text(sender_id, "Az időpont törlése sikertelen. Keress minket: blazsi88@gmail.com")
+            _send_text(sender_id, "Az időpont törlése sikertelen. Keress minket az oldalon megadott elérhetőségen.")
 
     elif payload.startswith("month:"):
         yyyy_mm = payload[6:]
@@ -443,9 +488,9 @@ def _handle_message_text(sender_id: str, text: str) -> None:
                 f"Név: {name}\n"
                 f"Telefon: {phone}\n"
                 f"E-mail: {email}\n\n"
-                f"Várjuk a 3980 Sátoraljaújhely, Hősök tere út 2 címen.\n"
-                f"Szolgáltatás díja: 30 € / 11 000 Ft\n\n"
-                f"Kérdés esetén érdeklődjön az alábbi e-mail címen:\nblazsi88@gmail.com"
+                f"Cím és elérhetőség: az oldalon megadott adatok szerint.\n"
+                f"Szolgáltatás díja: {db.get_settings()['price_display']}\n\n"
+                f"Kérdés esetén érdeklődjön az oldalon megadott e-mail címen."
             )
             _send_text(sender_id, msg)
             _send_buttons(sender_id, "Ha meggondoltad magad, akkor:", [{"title": "Időpont lemondása", "payload": f"CANCEL_SLOT:{slot_id}"}])

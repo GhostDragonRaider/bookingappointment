@@ -108,6 +108,14 @@ def init_db():
             conn.execute("ALTER TABLE slots ADD COLUMN reminder_sent INTEGER DEFAULT 0")
         except sqlite3.OperationalError:
             pass
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                price_eur INTEGER NOT NULL DEFAULT 30,
+                price_huf INTEGER NOT NULL DEFAULT 11000
+            )
+        """)
+        conn.execute("INSERT OR IGNORE INTO settings (id, price_eur, price_huf) VALUES (1, 30, 11000)")
         _ensure_slots_exist(conn)
 
 
@@ -118,6 +126,32 @@ def _ensure_slots_exist(conn: sqlite3.Connection):
             "INSERT OR IGNORE INTO slots (date, time, status) VALUES (?, ?, 'free')",
             (d, t),
         )
+
+
+def get_settings() -> dict:
+    """Beállítások: price_eur, price_huf, price_display (formázott sztring)."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT price_eur, price_huf FROM settings WHERE id = 1"
+        ).fetchone()
+        if not row:
+            return {"price_eur": 30, "price_huf": 11000, "price_display": "30 € / 11 000 Ft"}
+        eur, huf = row[0] or 30, row[1] or 11000
+        return {
+            "price_eur": eur,
+            "price_huf": huf,
+            "price_display": f"{eur} € / {huf:,} Ft".replace(",", " "),
+        }
+
+
+def update_settings(price_eur: int, price_huf: int) -> bool:
+    """Ár beállítások frissítése."""
+    with get_connection() as conn:
+        cur = conn.execute(
+            "UPDATE settings SET price_eur = ?, price_huf = ? WHERE id = 1",
+            (price_eur, price_huf),
+        )
+        return cur.rowcount > 0
 
 
 def get_slots():

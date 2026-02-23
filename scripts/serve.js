@@ -9,6 +9,8 @@ const root = join(__dirname, "..")
 const distDir = join(root, "dist")
 const port = Number(process.env.PORT) || 3000
 const isDev = process.argv.includes("--dev")
+// Ha nincs production, ne cache-eljen a böngésző (frissítéskor mindig legfrissebb tartalom)
+const noCache = isDev || process.env.NODE_ENV !== "production"
 
 const API_BACKEND = process.env.API_BACKEND || "http://127.0.0.1:8000"
 
@@ -23,8 +25,23 @@ app.use(
     },
   })
 )
-app.use(express.static(distDir))
-app.get("*", (_, res) => res.sendFile(join(distDir, "index.html")))
+// noCache: dev vagy nem-production (pl. start.sh) – frissítéskor legfrissebb build
+const staticOptions = noCache
+  ? {
+      setHeaders: (res) => {
+        res.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        res.set("Pragma", "no-cache")
+      },
+    }
+  : {}
+app.use(express.static(distDir, staticOptions))
+app.get("*", (_, res) => {
+  if (noCache) {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+    res.set("Pragma", "no-cache")
+  }
+  res.sendFile(join(distDir, "index.html"))
+})
 
 if (isDev) {
   console.log("Initial build...")

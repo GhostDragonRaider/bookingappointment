@@ -1,8 +1,10 @@
 import styled from "@emotion/styled"
-import { Routes, Route, useNavigate, Navigate } from "react-router-dom"
+import { Routes, Route, useNavigate, Navigate, Outlet, useLocation } from "react-router-dom"
+import { useState, type ReactNode } from "react"
 import SceduleAppointment from "./components/scedule_appointment"
 import AdminPage from "./adminpage"
-import { useState } from "react"
+import { useLanguage } from "./LanguageContext"
+import { TopBarProvider } from "./TopBarContext"
 
 import profileImg from "../pics/profile.png"
 import kep1 from "../pics/kép1.png"
@@ -131,15 +133,34 @@ const Divider = styled.div`
   }
 `
 
+const LayoutWrapper = styled.div`
+  position: relative;
+  min-height: 100vh;
+`
+
 const TopBar = styled.div`
-  position: absolute;
+  position: fixed;
   top: 1rem;
   right: 1rem;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 100;
 
   @media (max-width: 640px) {
     top: 0.75rem;
     right: 0.75rem;
+    gap: 0.4rem;
   }
+`
+
+const TopBarGroup = styled.div`
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
 `
 
 const AdminLoginButton = styled.button`
@@ -161,6 +182,28 @@ const AdminLoginButton = styled.button`
   @media (max-width: 640px) {
     padding: 0.4rem 0.75rem;
     font-size: 0.85rem;
+  }
+`
+
+const LangButton = styled.button<{ active?: boolean }>`
+  padding: 0.35rem 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid ${({ active }) => (active ? "#667eea" : "rgba(0, 0, 0, 0.2)")};
+  background: ${({ active }) => (active ? "#667eea" : "#f5f5f5")};
+  color: ${({ active }) => (active ? "white" : "#333")};
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+
+  &:hover {
+    background: ${({ active }) => (active ? "#5568d3" : "#e8e8e8")};
+    border-color: rgba(0, 0, 0, 0.3);
+  }
+
+  @media (max-width: 640px) {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.8rem;
   }
 `
 
@@ -293,104 +336,121 @@ function ProtectedAdmin() {
   return <AdminPage />
 }
 
-function HomePage() {
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
-  const navigate = useNavigate();
+function Layout() {
+  const { lang, setLang, t } = useLanguage()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const path = location.pathname.replace(/\/$/, "") || "/"
+  const isAdmin = path === "/admin" || path.endsWith("/admin")
+  const isLoggedIn = typeof window !== "undefined" && !!sessionStorage.getItem(ADMIN_KEY)
+  const showAdminLogin = !isAdmin && !isLoggedIn
+  const [topBarExtra, setTopBarExtra] = useState<ReactNode>(null)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [loginEmail, setLoginEmail] = useState("")
+  const [loginPassword, setLoginPassword] = useState("")
+  const [loginError, setLoginError] = useState("")
 
   const handleLoginSuccess = () => {
-    sessionStorage.setItem(ADMIN_KEY, "1");
-    setShowLoginModal(false);
-    setLoginError("");
-    navigate("/admin");
-  };
+    sessionStorage.setItem(ADMIN_KEY, "1")
+    setShowLoginModal(false)
+    setLoginError("")
+    navigate("/admin")
+  }
 
   return (
-    <Container style={{ position: "relative" }}>
+    <LayoutWrapper>
+      <TopBarProvider value={setTopBarExtra}>
       <TopBar>
-        <AdminLoginButton
-          type="button"
-          onClick={() => {
-            setShowLoginModal(true);
-            setLoginEmail("");
-            setLoginPassword("");
-            setLoginError("");
-          }}
-        >
-          Admin login
-        </AdminLoginButton>
+        {topBarExtra != null && <TopBarGroup>{topBarExtra}</TopBarGroup>}
+        <TopBarGroup>
+          <LangButton type="button" active={lang === "hu"} onClick={() => setLang("hu")}>
+            {t("langHu")}
+          </LangButton>
+          <LangButton type="button" active={lang === "en"} onClick={() => setLang("en")}>
+            {t("langEn")}
+          </LangButton>
+        </TopBarGroup>
+        {showAdminLogin && (
+          <AdminLoginButton
+            type="button"
+            onClick={() => {
+              setShowLoginModal(true)
+              setLoginEmail("")
+              setLoginPassword("")
+              setLoginError("")
+            }}
+          >
+            {t("adminLogin")}
+          </AdminLoginButton>
+        )}
       </TopBar>
       {showLoginModal && (
         <LoginOverlay onClick={() => setShowLoginModal(false)}>
           <LoginBoxWrapper onClick={(e) => e.stopPropagation()}>
             <LoginBox>
-              <CloseButton type="button" onClick={() => setShowLoginModal(false)} aria-label="Bezárás">
+              <CloseButton type="button" onClick={() => setShowLoginModal(false)} aria-label={t("close")}>
                 ×
               </CloseButton>
-              <LoginTitle>Admin bejelentkezés</LoginTitle>
+              <LoginTitle>{t("loginTitle")}</LoginTitle>
               {loginError && <LoginError>{loginError}</LoginError>}
               <LoginField
                 type="email"
-                placeholder="E-mail cím"
+                placeholder={t("emailPlaceholder")}
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
               />
               <LoginField
                 type="password"
-                placeholder="Jelszó"
+                placeholder={t("passwordPlaceholder")}
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
               />
               <LoginButton
                 type="button"
                 onClick={() => {
-                  if (loginEmail === "blazsi88@gmail.com" && loginPassword === "proba123") {
-                    handleLoginSuccess();
+                  if (loginEmail === "admin@example.com" && loginPassword === "admin") {
+                    handleLoginSuccess()
                   } else {
-                    setLoginError("Hibás felhasználónév vagy jelszó.");
+                    setLoginError(t("loginError"))
                   }
                 }}
               >
-                Bejelentkezés
+                {t("loginButton")}
               </LoginButton>
             </LoginBox>
           </LoginBoxWrapper>
         </LoginOverlay>
       )}
+      <Outlet />
+      </TopBarProvider>
+    </LayoutWrapper>
+  )
+}
+
+function HomePage() {
+  const { t } = useLanguage()
+  const navigate = useNavigate()
+
+  return (
+    <Container>
       <HeroSection>
-        <ProfileImage 
-          src={profileImg} 
-          alt="Profil kép" 
-        />
-        <IntroText>
-          Üdvözöllek! Blaskó Szabolcs #ChiroStrong - Csontkovács és Manuálterapeuta. 
-        </IntroText>
+        <ProfileImage src={profileImg} alt={t("profileAlt")} />
+        <IntroText>{t("homeIntro")}</IntroText>
       </HeroSection>
 
       <GallerySection>
         <GalleryGrid>
-          <GalleryImage src={kep1} alt="Kép 1" />
-          <GalleryImage src={kep2} alt="Kép 2" />
-          <GalleryImage src={kep3} alt="Kép 3" />
-          <GalleryImage src={kep4} alt="Kép 4" />
+          <GalleryImage src={kep1} alt={t("galleryAlt")} />
+          <GalleryImage src={kep2} alt={t("galleryAlt")} />
+          <GalleryImage src={kep3} alt={t("galleryAlt")} />
+          <GalleryImage src={kep4} alt={t("galleryAlt")} />
         </GalleryGrid>
       </GallerySection>
       <CtaSection>
-        <CtaText>
-        <strong>ChiroStrong – Erő és stabilitás a gerincednek</strong>
-
-Több mint 10 éve foglalkozom manuálterápiával és csontkovácsolással, 
-szakterületem a gerincproblémák hatékony kezelése. Erősember versenyzőként a 
-saját bőrömön tapasztaltam meg a test határait és a regeneráció fontosságát, 
-ezt a gyakorlati tudást viszem át a kezeléseimbe is. Nem bontom külön a folyamatokat: 
-egyetlen alkalom alatt, komplexen ötvözöm a manuálterápiát a csontkovácsolással és a 
-köpöly terápiával, hogy a lehető leggyorsabb és legtartósabb javulást érjük el.”
-        </CtaText>
+        <CtaText>{t("homeCtaTitle")}</CtaText>
         <Divider />
         <CtaButton type="button" onClick={() => navigate("/idopont")}>
-          Foglalj időpontot most
+          {t("bookNow")}
         </CtaButton>
       </CtaSection>
     </Container>
@@ -400,9 +460,11 @@ köpöly terápiával, hogy a lehető leggyorsabb és legtartósabb javulást é
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/idopont" element={<SceduleAppointment />} />
-      <Route path="/admin" element={<ProtectedAdmin />} />
+      <Route path="/" element={<Layout />}>
+        <Route index element={<HomePage />} />
+        <Route path="idopont" element={<SceduleAppointment />} />
+        <Route path="admin" element={<ProtectedAdmin />} />
+      </Route>
     </Routes>
   )
 }

@@ -2,7 +2,9 @@ import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import styled from "@emotion/styled"
 import { keyframes, css, Global } from "@emotion/react"
-import { isValidPhone, isValidEmail, PHONE_ERROR, EMAIL_ERROR } from "../validation"
+import { isValidPhone, isValidEmail } from "../validation"
+import { useLanguage } from "../LanguageContext"
+import { DAY_NAMES, PHONE_ERROR_MSG, EMAIL_ERROR_MSG } from "../translations"
 
 
 const Page = styled.div`
@@ -575,10 +577,6 @@ const globalStyles = css`
 type Slot = { id: number; date: string; time: string; status: string }
 
 const API_BASE = "" // relatív: /api → proxy a backendre (dev és production)
-const DAY_NAMES: Record<number, string> = {
-  0: "vasárnap", 1: "hétfő", 2: "kedd", 3: "szerda",
-  4: "csütörtök", 5: "péntek", 6: "szombat",
-}
 
 type TherapyType = "manuál" | "köpöly" | ""
 
@@ -591,6 +589,8 @@ type ConfirmationData = {
 
 export default function SceduleAppointment() {
   const navigate = useNavigate()
+  const { lang, t } = useLanguage()
+  const dayNames = DAY_NAMES[lang]
   const [slots, setSlots] = useState<Slot[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -601,6 +601,7 @@ export default function SceduleAppointment() {
   const [bookingEmail, setBookingEmail] = useState("")
   const [confirmation, setConfirmation] = useState<ConfirmationData | null>(null)
   const [bookingError, setBookingError] = useState<string | null>(null)
+  const [priceDisplay, setPriceDisplay] = useState("30 € / 11 000 Ft")
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -617,9 +618,23 @@ export default function SceduleAppointment() {
         setSlots(Array.isArray(data) ? data : [])
         setError(null)
       })
-      .catch((e) => { if (e.name !== "AbortError") setError(e.message || "Betöltési hiba") })
+      .catch((e) => { if (e.name !== "AbortError") setError(e.message || t("loadError")) })
       .finally(() => setLoading(false))
     return () => ctrl.abort()
+  }, [t])
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/settings`)
+      .then(async (r) => {
+        try {
+          const data = await r.json()
+          return data.price_display || "30 € / 11 000 Ft"
+        } catch {
+          return "30 € / 11 000 Ft"
+        }
+      })
+      .then(setPriceDisplay)
+      .catch(() => {})
   }, [])
 
   const byDate = (slots || []).reduce<Record<string, Slot[]>>((acc, s) => {
@@ -632,11 +647,11 @@ export default function SceduleAppointment() {
     if (!selectedSlot) return
     setBookingError(null)
     if (!isValidPhone(bookingPhone.trim())) {
-      setBookingError(PHONE_ERROR)
+      setBookingError(PHONE_ERROR_MSG[lang])
       return
     }
     if (!isValidEmail(bookingEmail.trim())) {
-      setBookingError(EMAIL_ERROR)
+      setBookingError(EMAIL_ERROR_MSG[lang])
       return
     }
     fetch(`${API_BASE}/api/book`, {
@@ -658,21 +673,21 @@ export default function SceduleAppointment() {
       })
       .then((res) => {
         if (res.ok) {
-          const therapyLabel = selectedTherapy === "manuál" ? "Manuál terápia" : "Köpöly terápia"
+          const therapyLabel = selectedTherapy === "manuál" ? t("therapyManual") : t("therapyKopely")
           setConfirmation({
             date: selectedSlot.date,
             time: selectedSlot.time,
             therapy: therapyLabel,
-            price: "30 € / 11 000 Ft",
+            price: priceDisplay,
           })
           setSlots((prev) =>
             prev.map((s) => (s.id === selectedSlot.id ? { ...s, status: "booked" } : s))
           )
         } else {
-          setBookingError(res.error || "A foglalás sikertelen. Próbáld újra.")
+          setBookingError(res.error || t("bookingFailed"))
         }
       })
-      .catch(() => setBookingError("Hiba történt. Próbáld újra."))
+      .catch(() => setBookingError(t("errorGeneric")))
   }
 
   if (confirmation) {
@@ -681,20 +696,19 @@ export default function SceduleAppointment() {
         <Global styles={globalStyles} />
         <Shell>
           <Header>
-            <Eyebrow>Időpont foglalás</Eyebrow>
-            <Title>Köszönjük a foglalását!</Title>
-            <Subtitle>Visszaigazoljuk az időpontot.</Subtitle>
+            <Eyebrow>{t("appointmentTitle")}</Eyebrow>
+            <Title>{t("confirmationThanks")}</Title>
+            <Subtitle>{t("confirmationSubtitle")}</Subtitle>
           </Header>
           <ConfirmationCard>
-            <ConfirmationTitle>Foglalás visszaigazolva</ConfirmationTitle>
-            <ConfirmationLine><strong>Időpont:</strong> {confirmation.date} – {confirmation.time}</ConfirmationLine>
-            <ConfirmationLine><strong>Terápia:</strong> {confirmation.therapy}</ConfirmationLine>
-            <ConfirmationLine><strong>Szolgáltatás díja:</strong> {confirmation.price}</ConfirmationLine>
-            <ConfirmationLine>Várjuk szeretettel a <strong>3980 Sátoraljaújhely, Hősök tere út 2</strong> cím alatt.</ConfirmationLine>
-            <ConfirmationLine>Bármilyen kérdésed van, keress bizalommal:</ConfirmationLine>
-            <ConfirmationLine>E-mail: <a href="mailto:blazsi88@gmail.com">blazsi88@gmail.com</a></ConfirmationLine>
+            <ConfirmationTitle>{t("confirmationTitle")}</ConfirmationTitle>
+            <ConfirmationLine><strong>{t("confirmationTime")}</strong> {confirmation.date} – {confirmation.time}</ConfirmationLine>
+            <ConfirmationLine><strong>{t("confirmationTherapy")}</strong> {confirmation.therapy}</ConfirmationLine>
+            <ConfirmationLine><strong>{t("confirmationPrice")}</strong> {confirmation.price}</ConfirmationLine>
+            <ConfirmationLine>{t("confirmationAddress")}</ConfirmationLine>
+            <ConfirmationLine>{t("confirmationContact")}</ConfirmationLine>
             <BackToHomeButton type="button" onClick={() => navigate("/")}>
-              Vissza a főoldalra
+              {t("backToHome")}
             </BackToHomeButton>
           </ConfirmationCard>
         </Shell>
@@ -707,16 +721,14 @@ export default function SceduleAppointment() {
       <Global styles={globalStyles} />
       <Shell>
         <Header>
-          <Eyebrow>Időpont foglalás</Eyebrow>
-          <Title>Válassz időpontot</Title>
-          <Subtitle>
-            Válaszd ki a neked megfelelő időpontot az alábbi listából.
-          </Subtitle>
+          <Eyebrow>{t("appointmentTitle")}</Eyebrow>
+          <Title>{t("appointmentTitle")}</Title>
+          <Subtitle>{t("appointmentSubtitle")}</Subtitle>
         </Header>
         <ContentGrid as="div">
           <Card>
-            <FormTitle>Elérhető időpontok</FormTitle>
-            {loading && <HelperText>Betöltés…</HelperText>}
+            <FormTitle>{t("availableSlots")}</FormTitle>
+            {loading && <HelperText>{t("loading")}</HelperText>}
             {error && <ErrorMessage>{error}</ErrorMessage>}
             {!loading && !error && (
               <DateGrid>
@@ -726,7 +738,7 @@ export default function SceduleAppointment() {
                   return (
                     <DateColumn key={dateStr} weekend={weekend}>
                       <DayHeader>
-                        <DayName>{DAY_NAMES[d.getDay()]}</DayName>
+                        <DayName>{dayNames[d.getDay()]}</DayName>
                         <DayDate>{dateStr}</DayDate>
                       </DayHeader>
                       {daySlots.map((slot) => (
@@ -748,64 +760,64 @@ export default function SceduleAppointment() {
             {selectedSlot && (
               <>
                 <SummaryCard>
-                  <SummaryLabel>Kiválasztott időpont</SummaryLabel>
+                  <SummaryLabel>{t("selectedSlot")}</SummaryLabel>
                   <SummaryValue>
                     {selectedSlot.date} – {selectedSlot.time}
                   </SummaryValue>
                 </SummaryCard>
                 <TherapySection>
-                  <TherapyTitle>Milyen kezelést szeretnél?</TherapyTitle>
+                  <TherapyTitle>{t("therapyQuestion")}</TherapyTitle>
                   <TherapyOptions>
                     <TherapyCard
                       type="button"
                       selected={selectedTherapy === "manuál"}
                       onClick={() => setSelectedTherapy("manuál")}
                     >
-                      Manuál terápia
+                      {t("therapyManual")}
                     </TherapyCard>
                     <TherapyCard
                       type="button"
                       selected={selectedTherapy === "köpöly"}
                       onClick={() => setSelectedTherapy("köpöly")}
                     >
-                      Köpöly terápia
+                      {t("therapyKopely")}
                     </TherapyCard>
                   </TherapyOptions>
                   <FormFieldsRow>
                     <Field>
-                      Foglaló neve
+                      {t("bookingName")}
                       <Input
                         type="text"
-                        placeholder="Név"
+                        placeholder={t("bookingNamePlaceholder")}
                         value={bookingName}
                         onChange={(e) => setBookingName(e.target.value)}
                       />
                     </Field>
                     <Field>
-                      Telefonszám
+                      {t("phone")}
                       <Input
                         type="tel"
-                        placeholder="+36 30 123 4567"
+                        placeholder={t("phonePlaceholder")}
                         value={bookingPhone}
                         onChange={(e) => setBookingPhone(e.target.value)}
                       />
                     </Field>
                     <Field>
-                      E-mail cím
+                      {t("email")}
                       <Input
                         type="email"
-                        placeholder="pelda@email.hu"
+                        placeholder={t("emailPlaceholderBooking")}
                         value={bookingEmail}
                         onChange={(e) => setBookingEmail(e.target.value)}
                       />
                     </Field>
                   </FormFieldsRow>
-                  <PriceTag> A szolgáltatás díja:
-                    30 € <PriceNote>/ 11 000 Ft</PriceNote>
+                  <PriceTag> {t("servicePrice")}{" "}
+                    <PriceNote>{priceDisplay}</PriceNote>
                   </PriceTag>
                   {bookingError && <ErrorMessage>{bookingError}</ErrorMessage>}
                   <ActionRow>
-                    <SubmitButton type="button" onClick={handleBook}>Időpont foglalása</SubmitButton>
+                    <SubmitButton type="button" onClick={handleBook}>{t("submitBook")}</SubmitButton>
                   </ActionRow>
                 </TherapySection>
               </>
