@@ -6,7 +6,7 @@ import { useLanguage } from "./LanguageContext"
 import { useTopBarExtra } from "./TopBarContext"
 import { PHONE_ERROR_MSG, EMAIL_ERROR_MSG } from "./translations"
 
-const API_BASE = "" // relatív: /api → proxy a backendre (dev és production)
+const API_BASE = (typeof window !== "undefined" && (window as any).__BASE_PATH__) || "" // relatív vagy /projects/project-2 (VPS)
 const ADMIN_KEY = "admin_session"
 
 type BookedSlot = {

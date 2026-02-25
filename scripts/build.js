@@ -10,6 +10,11 @@ const watch = process.argv.includes("--watch")
 
 mkdirSync(outDir, { recursive: true })
 
+// VPS-en /projects/project-2/ alatt fut: BASE_PATH=/projects/project-2 npm run build
+const BASE_PATH = process.env.BASE_PATH || ""
+const scriptSrc = BASE_PATH ? "main.js" : "/main.js"
+const basePathJson = JSON.stringify(BASE_PATH)
+
 const html = `<!DOCTYPE html>
 <html lang="hu">
 <head>
@@ -18,8 +23,9 @@ const html = `<!DOCTYPE html>
   <title>Project1</title>
 </head>
 <body>
+  <script>window.__BASE_PATH__=${basePathJson}</script>
   <div id="root"></div>
-  <script src="/main.js"></script>
+  <script src="${scriptSrc}"></script>
 </body>
 </html>
 `

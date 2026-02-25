@@ -576,7 +576,7 @@ const globalStyles = css`
 
 type Slot = { id: number; date: string; time: string; status: string }
 
-const API_BASE = "" // relatív: /api → proxy a backendre (dev és production)
+const API_BASE = (typeof window !== "undefined" && (window as any).__BASE_PATH__) || "" // relatív vagy /projects/project-2 (VPS)
 
 type TherapyType = "manuál" | "köpöly" | ""
 

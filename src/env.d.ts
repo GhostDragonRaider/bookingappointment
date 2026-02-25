@@ -4,6 +4,12 @@ declare namespace NodeJS {
   }
 }
 
+declare global {
+  interface Window {
+    __BASE_PATH__?: string
+  }
+}
+
 declare const process: { env: NodeJS.ProcessEnv }
 
 declare module "*.png" {
