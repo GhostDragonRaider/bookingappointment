@@ -3,12 +3,11 @@ Adatbázis kezelő – időpontok (slots) tárolása SQLite-ban.
 Tábla: id, date, time, status, booking_name
 - Hétköznap: 15:15, 16:15, 17:00, 17:45, 18:30
 - Hétvége: 08:30, 09:30, 10:30, 11:15, 12:00
-- Mindig aktuális + következő hónap; hóvégén (25-től) a következő utáni hónap is.
+- Mától számított 12 hónapra előre elérhetők a foglalható időpontok.
 """
 import sqlite3
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
-from calendar import monthrange
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "app.db"
@@ -33,35 +32,10 @@ def get_connection():
 
 
 def _get_month_range() -> tuple[date, date]:
-    """Visszaadja a szükséges dátumtartományt: (kezdő_nap, záró_nap).
-    Alap: aktuális + következő hónap.
-    Hóvégén (25-től): + következő utáni hónap is."""
+    """Visszaadja a foglalható tartományt: mától számított 12 hónap."""
     today = date.today()
-    start = today.replace(day=1)  # ehónap 1-je
-
-    year, month = today.year, today.month
-    _, last_day = monthrange(year, month)
-    end_next = date(year, month, last_day)  # ehónap vége
-
-    # következő hónap vége
-    if month == 12:
-        year, month = year + 1, 1
-    else:
-        month += 1
-    _, last_day = monthrange(year, month)
-    end_next_next = date(year, month, last_day)
-
-    if today.day >= 25:
-        # hóvége: a következő utáni hónap vége
-        if month == 12:
-            year, month = year + 1, 1
-        else:
-            month += 1
-        _, last_day = monthrange(year, month)
-        end = date(year, month, last_day)
-    else:
-        end = end_next_next
-
+    start = today
+    end = today + timedelta(days=365)
     return start, end
 
 
@@ -155,7 +129,7 @@ def update_settings(price_eur: int, price_huf: int) -> bool:
 
 
 def get_slots():
-    """Visszaadja az időpontokat: mai napról, aktuális + következő hónap(ok) ablakában.
+    """Visszaadja az időpontokat: mai naptól a következő 12 hónap ablakában.
     Ha booking_name nem üres, status = 'booked'."""
     with get_connection() as conn:
         _ensure_slots_exist(conn)

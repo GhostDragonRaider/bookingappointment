@@ -229,47 +229,145 @@ const DateGrid = styled.div`
   }
 `
 
-const DateColumn = styled.div<{ weekend?: boolean }>`
-  background: ${({ weekend }) => (weekend ? "#fff6ef" : "#f3fbf9")};
-  border-radius: 16px;
-  padding: 0.85rem;
-  border: 1px solid ${({ weekend }) => (weekend ? "rgba(192, 108, 44, 0.25)" : "rgba(31, 138, 122, 0.18)")};
+const CalendarWrap = styled.div`
   display: grid;
-  gap: 0.65rem;
+  gap: 1.25rem;
 
-  @media (max-width: 640px) {
-    padding: 0.65rem;
-    border-radius: 12px;
-    gap: 0.5rem;
+  @media (min-width: 960px) {
+    grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+    align-items: start;
   }
 `
 
-const DayHeader = styled.div`
-  display: grid;
-  gap: 0.25rem;
-  text-align: center;
+const CalendarSurface = styled.div`
+  border: 1px solid rgba(22, 61, 58, 0.12);
+  background: linear-gradient(180deg, #f9fffd 0%, #ffffff 100%);
+  border-radius: 18px;
+  padding: 1rem;
+  box-shadow: 0 12px 28px rgba(15, 45, 40, 0.08);
 `
 
-const DayName = styled.span`
-  font-weight: 700;
+const DesktopCalendar = styled.div`
+  @media (max-width: 640px) {
+    display: none;
+  }
+`
+
+const CalendarTopBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.9rem;
+`
+
+const MonthTitle = styled.h3`
+  margin: 0;
+  font-size: 1.15rem;
   color: #163d3a;
   text-transform: capitalize;
+  letter-spacing: 0.02em;
+`
 
-  @media (max-width: 640px) {
-    font-size: 0.85rem;
+const MonthNavButton = styled.button`
+  border: 1px solid rgba(22, 61, 58, 0.25);
+  background: #ffffff;
+  border-radius: 999px;
+  width: 34px;
+  height: 34px;
+  cursor: pointer;
+  font-weight: 700;
+  color: #163d3a;
+  display: grid;
+  place-items: center;
+  transition: all 0.18s ease;
+
+  &:hover {
+    background: #e8f7f4;
+    border-color: #1f8a7a;
+    transform: translateY(-1px);
   }
 `
 
-const DayDate = styled.span`
-  font-size: 0.85rem;
-  color: #5b6f6b;
+const WeekHeader = styled.div`
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+`
 
-  @media (max-width: 640px) {
-    font-size: 0.75rem;
+const WeekHeaderCell = styled.div`
+  text-align: center;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #6b7f7c;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+`
+
+const DayCell = styled.button<{ selected?: boolean; hasSlots?: boolean; isToday?: boolean }>`
+  min-height: 72px;
+  border-radius: 14px;
+  border: 1px solid
+    ${({ selected, hasSlots }) =>
+      selected ? "#1f8a7a" : hasSlots ? "rgba(22, 61, 58, 0.2)" : "rgba(22, 61, 58, 0.08)"};
+  background: ${({ selected, hasSlots, isToday }) =>
+    selected
+      ? "linear-gradient(145deg, #d6f2ec 0%, #e4f8f3 100%)"
+      : isToday
+        ? "linear-gradient(145deg, #fff6e9 0%, #fffdf8 100%)"
+        : hasSlots
+          ? "#ffffff"
+          : "#f7f7f7"};
+  color: ${({ hasSlots }) => (hasSlots ? "#1c1c1c" : "#a1a1a1")};
+  cursor: ${({ hasSlots }) => (hasSlots ? "pointer" : "default")};
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.25rem;
+  transition: all 0.2s ease;
+  box-shadow: ${({ selected }) => (selected ? "0 8px 16px rgba(31, 138, 122, 0.18)" : "none")};
+
+  &:hover {
+    ${({ hasSlots }) => (hasSlots ? "border-color: #1f8a7a; transform: translateY(-1px);" : "")}
   }
 `
 
+const TimePanel = styled.div`
+  border: 1px solid rgba(22, 61, 58, 0.12);
+  background: linear-gradient(160deg, #f4fcf9 0%, #f7fbfa 100%);
+  border-radius: 18px;
+  padding: 1.1rem;
+  display: grid;
+  gap: 0.75rem;
+  box-shadow: 0 12px 28px rgba(15, 45, 40, 0.08);
+`
 
+const TimePanelTitle = styled.h4`
+  margin: 0;
+  font-size: 1rem;
+  color: #163d3a;
+`
+
+const MobileDateSelect = styled.select`
+  display: none;
+  border-radius: 10px;
+  border: 1px solid rgba(22, 61, 58, 0.22);
+  background: #ffffff;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9rem;
+  color: #1c1c1c;
+
+  @media (max-width: 640px) {
+    display: block;
+  }
+`
+
+const DayNumber = styled.span`
+  font-size: 1rem;
+  line-height: 1;
+`
 
 const SlotButton = styled.button<{ selected?: boolean; disabled?: boolean }>`
   padding: 0.5rem 0.75rem;
@@ -591,9 +689,17 @@ export default function SceduleAppointment() {
   const navigate = useNavigate()
   const { lang, t } = useLanguage()
   const dayNames = DAY_NAMES[lang]
+  const weekdayLabels = lang === "hu"
+    ? ["H", "K", "Sze", "Cs", "P", "Szo", "V"]
+    : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
   const [slots, setSlots] = useState<Slot[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), 1)
+  })
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
   const [selectedTherapy, setSelectedTherapy] = useState<TherapyType>("")
   const [bookingName, setBookingName] = useState("")
@@ -615,7 +721,15 @@ export default function SceduleAppointment() {
         }
       })
       .then((data) => {
-        setSlots(Array.isArray(data) ? data : [])
+        const nextSlots = Array.isArray(data) ? data : []
+        setSlots(nextSlots)
+        const firstFree = nextSlots.find((s) => s.status === "free")
+        if (firstFree) {
+          const dt = new Date(firstFree.date)
+          if (!Number.isNaN(dt.getTime())) {
+            setCalendarMonth(new Date(dt.getFullYear(), dt.getMonth(), 1))
+          }
+        }
         setError(null)
       })
       .catch((e) => { if (e.name !== "AbortError") setError(e.message || t("loadError")) })
@@ -637,11 +751,41 @@ export default function SceduleAppointment() {
       .catch(() => {})
   }, [])
 
-  const byDate = (slots || []).reduce<Record<string, Slot[]>>((acc, s) => {
+  const freeSlotsByDate = (slots || []).reduce<Record<string, Slot[]>>((acc, s) => {
+    if (s.status !== "free") return acc
     if (!acc[s.date]) acc[s.date] = []
     acc[s.date].push(s)
     return acc
   }, {})
+
+  const allAvailableDates = Object.keys(freeSlotsByDate).sort()
+
+  useEffect(() => {
+    if (!selectedDate && allAvailableDates.length > 0) {
+      setSelectedDate(allAvailableDates[0])
+    }
+  }, [selectedDate, allAvailableDates])
+
+  useEffect(() => {
+    if (!selectedDate) return
+    const selectedStillValid = freeSlotsByDate[selectedDate]?.some((s) => s.id === selectedSlot?.id)
+    if (!selectedStillValid) setSelectedSlot(null)
+  }, [selectedDate, selectedSlot, freeSlotsByDate])
+
+  const selectedDateSlots = selectedDate ? freeSlotsByDate[selectedDate] || [] : []
+
+  const year = calendarMonth.getFullYear()
+  const month = calendarMonth.getMonth()
+  const firstDay = new Date(year, month, 1)
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const firstDayOffset = (firstDay.getDay() + 6) % 7 // hétfő az első oszlop
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const monthCells: Array<string | null> = []
+  for (let i = 0; i < firstDayOffset; i += 1) monthCells.push(null)
+  for (let d = 1; d <= daysInMonth; d += 1) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`
+    monthCells.push(dateStr)
+  }
 
   const handleBook = () => {
     if (!selectedSlot) return
@@ -731,31 +875,99 @@ export default function SceduleAppointment() {
             {loading && <HelperText>{t("loading")}</HelperText>}
             {error && <ErrorMessage>{error}</ErrorMessage>}
             {!loading && !error && (
-              <DateGrid>
-                {Object.entries(byDate).map(([dateStr, daySlots]) => {
-                  const d = new Date(dateStr)
-                  const weekend = d.getDay() === 0 || d.getDay() === 6
-                  return (
-                    <DateColumn key={dateStr} weekend={weekend}>
-                      <DayHeader>
-                        <DayName>{dayNames[d.getDay()]}</DayName>
-                        <DayDate>{dateStr}</DayDate>
-                      </DayHeader>
-                      {daySlots.map((slot) => (
-                        <SlotButton
-                          key={slot.id}
-                          type="button"
-                          selected={selectedSlot?.id === slot.id}
-                          disabled={slot.status !== "free"}
-                          onClick={() => setSelectedSlot(slot)}
-                        >
-                          {slot.time}
-                        </SlotButton>
+              <CalendarWrap>
+                <DesktopCalendar>
+                  <CalendarSurface>
+                    <CalendarTopBar>
+                      <MonthNavButton
+                        type="button"
+                        onClick={() => setCalendarMonth(new Date(year, month - 1, 1))}
+                      >
+                        {"<"}
+                      </MonthNavButton>
+                      <MonthTitle>
+                        {new Intl.DateTimeFormat(lang === "hu" ? "hu-HU" : "en-US", {
+                          year: "numeric",
+                          month: "long",
+                        }).format(calendarMonth)}
+                      </MonthTitle>
+                      <MonthNavButton
+                        type="button"
+                        onClick={() => setCalendarMonth(new Date(year, month + 1, 1))}
+                      >
+                        {">"}
+                      </MonthNavButton>
+                    </CalendarTopBar>
+                    <WeekHeader>
+                      {weekdayLabels.map((label) => (
+                        <WeekHeaderCell key={label}>{label}</WeekHeaderCell>
                       ))}
-                    </DateColumn>
-                  )
-                })}
-              </DateGrid>
+                    </WeekHeader>
+                    <DateGrid>
+                      {monthCells.map((dateStr, index) => {
+                        if (!dateStr) {
+                          return <div key={`empty-${index}`} />
+                        }
+                        const hasSlots = Boolean(freeSlotsByDate[dateStr]?.length)
+                        const isToday = dateStr === todayIso
+                        return (
+                          <DayCell
+                            key={dateStr}
+                            type="button"
+                            hasSlots={hasSlots}
+                            isToday={isToday}
+                            selected={selectedDate === dateStr}
+                            onClick={() => {
+                              setSelectedDate(dateStr)
+                              setSelectedSlot(null)
+                            }}
+                          >
+                            <DayNumber>{Number(dateStr.slice(-2))}</DayNumber>
+                          </DayCell>
+                        )
+                      })}
+                    </DateGrid>
+                  </CalendarSurface>
+                </DesktopCalendar>
+                <TimePanel>
+                  <MobileDateSelect
+                    value={selectedDate ?? ""}
+                    onChange={(e) => {
+                      setSelectedDate(e.target.value || null)
+                      setSelectedSlot(null)
+                    }}
+                  >
+                    {allAvailableDates.length === 0 && (
+                      <option value="">{t("noSlots")}</option>
+                    )}
+                    {allAvailableDates.map((dateStr) => {
+                      const dayLabel = dayNames[new Date(dateStr).getDay()]
+                      return (
+                        <option key={dateStr} value={dateStr}>
+                          {`${dateStr} (${dayLabel})`}
+                        </option>
+                      )
+                    })}
+                  </MobileDateSelect>
+                  <TimePanelTitle>
+                    {selectedDate
+                      ? `${dayNames[new Date(selectedDate).getDay()]} - ${selectedDate}`
+                      : t("selectedSlot")}
+                  </TimePanelTitle>
+                  {!selectedDate && <HelperText>{t("slotLabel")}</HelperText>}
+                  {selectedDate && selectedDateSlots.length === 0 && <HelperText>{t("noSlots")}</HelperText>}
+                  {selectedDateSlots.map((slot) => (
+                    <SlotButton
+                      key={slot.id}
+                      type="button"
+                      selected={selectedSlot?.id === slot.id}
+                      onClick={() => setSelectedSlot(slot)}
+                    >
+                      {slot.time}
+                    </SlotButton>
+                  ))}
+                </TimePanel>
+              </CalendarWrap>
             )}
             {selectedSlot && (
               <>

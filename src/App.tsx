@@ -134,33 +134,37 @@ const Divider = styled.div`
 `
 
 const LayoutWrapper = styled.div`
-  position: relative;
   min-height: 100vh;
 `
 
-const TopBar = styled.div`
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 0.5rem;
-  z-index: 100;
+const TopBarShell = styled.div`
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem 2rem 0;
 
   @media (max-width: 640px) {
-    top: 0.75rem;
-    right: 0.75rem;
-    gap: 0.4rem;
+    padding: 0.75rem 1rem 0;
   }
+`
+
+const TopBar = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
 `
 
 const TopBarGroup = styled.div`
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  flex-shrink: 0;
+  justify-content: flex-end;
+
+  @media (max-width: 640px) {
+    gap: 0.4rem;
+  }
 `
 
 const AdminLoginButton = styled.button`
@@ -360,30 +364,32 @@ function Layout() {
   return (
     <LayoutWrapper>
       <TopBarProvider value={setTopBarExtra}>
-      <TopBar>
-        {topBarExtra != null && <TopBarGroup>{topBarExtra}</TopBarGroup>}
-        <TopBarGroup>
-          <LangButton type="button" active={lang === "hu"} onClick={() => setLang("hu")}>
-            {t("langHu")}
-          </LangButton>
-          <LangButton type="button" active={lang === "en"} onClick={() => setLang("en")}>
-            {t("langEn")}
-          </LangButton>
-        </TopBarGroup>
-        {showAdminLogin && (
-          <AdminLoginButton
-            type="button"
-            onClick={() => {
-              setShowLoginModal(true)
-              setLoginEmail("")
-              setLoginPassword("")
-              setLoginError("")
-            }}
-          >
-            {t("adminLogin")}
-          </AdminLoginButton>
-        )}
-      </TopBar>
+      <TopBarShell>
+        <TopBar>
+          {topBarExtra != null && <TopBarGroup>{topBarExtra}</TopBarGroup>}
+          <TopBarGroup>
+            <LangButton type="button" active={lang === "hu"} onClick={() => setLang("hu")}>
+              {t("langHu")}
+            </LangButton>
+            <LangButton type="button" active={lang === "en"} onClick={() => setLang("en")}>
+              {t("langEn")}
+            </LangButton>
+          </TopBarGroup>
+          {showAdminLogin && (
+            <AdminLoginButton
+              type="button"
+              onClick={() => {
+                setShowLoginModal(true)
+                setLoginEmail("")
+                setLoginPassword("")
+                setLoginError("")
+              }}
+            >
+              {t("adminLogin")}
+            </AdminLoginButton>
+          )}
+        </TopBar>
+      </TopBarShell>
       {showLoginModal && (
         <LoginOverlay onClick={() => setShowLoginModal(false)}>
           <LoginBoxWrapper onClick={(e) => e.stopPropagation()}>
